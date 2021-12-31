@@ -24,6 +24,6 @@ A2.使用advanced()來實作回到上一個state的功能
 
 Q3.可使用graphviz自動產出fsm的code，但無法產出png檔  
 A3.將產出來的fsm code，透過以下方式產出圖:  
-	1.將以下的code "C:\Users\grgy0\Graphviz\bin\dot" -T png test.gv 1>fsm.png 2>error.txt 寫進一個記事本中，並將檔名改成bat檔  
+	1.將以下的code '"C:\Users\grgy0\Graphviz\bin\dot" -T png test.gv 1>fsm.png 2>error.txt' 寫進一個記事本中，並將檔名改成bat檔  
 	2.透過此bat執行檔產出fsm.png  
 	3.將fsm.png手動丟入此Project的資料夾中，讓程式能夠去讀取圖片上的FSM，並實作其功能  
