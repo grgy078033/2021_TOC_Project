@@ -2,6 +2,7 @@ import os
 import sys
 
 from flask import Flask, jsonify, request, abort, send_file
+from flask.logging import create_logger
 from dotenv import load_dotenv
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError
@@ -12,31 +13,174 @@ from utils import send_text_message
 
 load_dotenv()
 
-
 machine = TocMachine(
-    states=["user", "state1", "state2"],
+    states=["start",
+            "lobby",
+            "sharing",
+            "boy", "girl",
+            "boy_fast", "boy_slow", "girl_fast", "girl_slow",
+            "boy_fast_crazy", "boy_fast_happy", "boy_slow_ease", "boy_slow_comfort", "girl_fast_crazy", "girl_fast_happy", "girl_slow_ease", "girl_slow_comfort"],
     transitions=[
         {
             "trigger": "advance",
-            "source": "user",
-            "dest": "state1",
-            "conditions": "is_going_to_state1",
+            "source": "start",
+            "dest": "lobby",
+            "conditions": "is_going_to_lobby",
         },
         {
             "trigger": "advance",
-            "source": "user",
-            "dest": "state2",
-            "conditions": "is_going_to_state2",
+            "source": "lobby",
+            "dest": "sharing",
+            "conditions": "is_going_to_sharing",
         },
-        {"trigger": "go_back", "source": ["state1", "state2"], "dest": "user"},
+        {
+            "trigger": "advance",
+            "source": "sharing",
+            "dest": "boy",
+            "conditions": "is_going_to_boy",
+        },
+        {
+            "trigger": "advance",
+            "source": "sharing",
+            "dest": "girl",
+            "conditions": "is_going_to_girl",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy",
+            "dest": "boy_fast",
+            "conditions": "boy_to_fast",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy",
+            "dest": "boy_slow",
+            "conditions": "boy_to_slow",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl",
+            "dest": "girl_fast",
+            "conditions": "girl_to_fast",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl",
+            "dest": "girl_slow",
+            "conditions": "girl_to_slow",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy_fast",
+            "dest": "boy_fast_crazy",
+            "conditions": "boy_fast_to_crazy",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy_fast",
+            "dest": "boy_fast_happy",
+            "conditions": "boy_fast_to_happy",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy_slow",
+            "dest": "boy_slow_ease",
+            "conditions": "boy_slow_to_ease",
+        },
+        {
+            "trigger": "advance",
+            "source": "boy_slow",
+            "dest": "boy_slow_comfort",
+            "conditions": "boy_slow_to_comfort",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl_fast",
+            "dest": "girl_fast_crazy",
+            "conditions": "girl_fast_to_crazy",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl_fast",
+            "dest": "girl_fast_happy",
+            "conditions": "girl_fast_to_happy",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl_slow",
+            "dest": "girl_slow_ease",
+            "conditions": "girl_slow_to_ease",
+        },
+        {
+            "trigger": "advance",
+            "source": "girl_slow",
+            "dest": "girl_slow_comfort",
+            "conditions": "girl_slow_to_comfort",
+        },
+        #------------------------------------------back----------------------------------------
+        {"trigger": "advance", "source": ["boy", "girl"], "dest": "sharing", "conditions": "is_backing_to_gender"},
+        {
+            "trigger": "advance", 
+            "source": ["boy_fast", "boy_slow"], 
+            "dest": "boy", 
+            "conditions": "is_backing_to_speed"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["girl_fast", "girl_slow"], 
+            "dest": "girl", 
+            "conditions": "is_backing_to_speed"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["boy_fast_crazy", "boy_fast_happy"], 
+            "dest": "boy_fast", 
+            "conditions": "is_backing_to_fast_type"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["boy_slow_ease", "boy_slow_comfort"], 
+            "dest": "boy_slow", 
+            "conditions": "is_backing_to_slow_type"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["girl_fast_crazy", "girl_fast_happy"], 
+            "dest": "girl_fast", 
+            "conditions": "is_backing_to_fast_type"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["girl_slow_ease", "girl_slow_comfort"], 
+            "dest": "girl_slow", 
+            "conditions": "is_backing_to_slow_type"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["boy_fast_crazy", "boy_fast_happy", "boy_slow_ease", "boy_slow_comfort", "girl_fast_crazy", "girl_fast_happy", "girl_slow_ease", "girl_slow_comfort"], 
+            "dest": "sharing", 
+            "conditions": "is_backing_to_choose_gender"
+        },
+        {
+            "trigger": "advance", 
+            "source": ["boy_fast_crazy", "boy_fast_happy", "boy_slow_ease", "boy_slow_comfort", "girl_fast_crazy", "girl_fast_happy", "girl_slow_ease", "girl_slow_comfort"], 
+            "dest": "lobby", 
+            "conditions": "is_backing_to_back_lobby"
+        },
+        {
+            "trigger": "advance", 
+            "source": "sharing", 
+            "dest": "lobby", 
+            "conditions": "is_share_backing_to_lobby"
+        },
     ],
-    initial="user",
+    initial="start",
     auto_transitions=False,
     show_conditions=True,
 )
 
 app = Flask(__name__, static_url_path="")
-
+LOG = create_logger(app)
 
 # get channel_secret and channel_access_token from your environment variable
 channel_secret = os.getenv("LINE_CHANNEL_SECRET", None)
@@ -57,7 +201,7 @@ def callback():
     signature = request.headers["X-Line-Signature"]
     # get request body as text
     body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
+    LOG.info("Request body: " + body)
 
     # parse webhook body
     try:
@@ -84,7 +228,7 @@ def webhook_handler():
     signature = request.headers["X-Line-Signature"]
     # get request body as text
     body = request.get_data(as_text=True)
-    app.logger.info(f"Request body: {body}")
+    LOG.info(f"Request body: {body}")
 
     # parse webhook body
     try:
@@ -103,8 +247,8 @@ def webhook_handler():
         print(f"\nFSM STATE: {machine.state}")
         print(f"REQUEST BODY: \n{body}")
         response = machine.advance(event)
-        if response == False:
-            send_text_message(event.reply_token, "Not Entering any State")
+        if response is False:
+            send_text_message(event.reply_token, "請輸入正確訊息")
 
     return "OK"
 
@@ -113,7 +257,6 @@ def webhook_handler():
 def show_fsm():
     machine.get_graph().draw("fsm.png", prog="dot", format="png")
     return send_file("fsm.png", mimetype="image/png")
-
 
 if __name__ == "__main__":
     port = os.environ.get("PORT", 8000)
